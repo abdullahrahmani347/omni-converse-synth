@@ -1,5 +1,5 @@
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ChatInterface } from "@/components/chat/ChatInterface";
 import { createClient } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
