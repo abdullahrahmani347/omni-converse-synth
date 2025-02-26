@@ -1,15 +1,25 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Bot, Send, Sparkles } from "lucide-react";
 import { User } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
+import { useToast } from "@/hooks/use-toast";
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL!,
+  import.meta.env.VITE_SUPABASE_ANON_KEY!
+);
 
 interface Message {
+  id: number;
   content: string;
   role: "user" | "assistant";
   model: "creative" | "analytical" | "ethical";
+  user_id: string;
+  created_at: string;
 }
 
 interface ChatInterfaceProps {
@@ -20,28 +30,99 @@ export const ChatInterface = ({ user }: ChatInterfaceProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [selectedModel, setSelectedModel] = useState<"creative" | "analytical" | "ethical">("creative");
+  const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
 
-  const handleSend = () => {
-    if (!input.trim()) return;
-    
-    const newMessage: Message = {
-      content: input,
-      role: "user",
-      model: selectedModel
+  useEffect(() => {
+    // Fetch existing messages
+    const fetchMessages = async () => {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        toast({
+          title: "Error fetching messages",
+          description: error.message,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (data) {
+        setMessages(data);
+      }
     };
-    
-    setMessages([...messages, newMessage]);
-    setInput("");
-    
-    // Simulate AI response
-    setTimeout(() => {
-      const response: Message = {
-        content: `AI response using ${selectedModel} model...`,
-        role: "assistant",
-        model: selectedModel
-      };
-      setMessages(prev => [...prev, response]);
-    }, 1000);
+
+    fetchMessages();
+
+    // Subscribe to new messages
+    const channel = supabase
+      .channel('messages')
+      .on('postgres_changes', 
+        { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'messages' 
+        }, 
+        (payload) => {
+          setMessages(current => [...current, payload.new as Message]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [toast]);
+
+  const handleSend = async () => {
+    if (!input.trim() || isLoading) return;
+
+    setIsLoading(true);
+    const newMessage = {
+      content: input,
+      role: "user" as const,
+      model: selectedModel,
+      user_id: user.id,
+    };
+
+    try {
+      // Insert the user message
+      const { error: insertError } = await supabase
+        .from('messages')
+        .insert([newMessage]);
+
+      if (insertError) throw insertError;
+
+      setInput("");
+
+      // Simulate AI response
+      setTimeout(async () => {
+        const aiResponse = {
+          content: `AI response using ${selectedModel} model...`,
+          role: "assistant" as const,
+          model: selectedModel,
+          user_id: user.id,
+        };
+
+        const { error: aiError } = await supabase
+          .from('messages')
+          .insert([aiResponse]);
+
+        if (aiError) throw aiError;
+      }, 1000);
+
+    } catch (error: any) {
+      toast({
+        title: "Error sending message",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -80,9 +161,9 @@ export const ChatInterface = ({ user }: ChatInterfaceProps) => {
       </div>
       
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((message, index) => (
+        {messages.map((message) => (
           <div
-            key={index}
+            key={message.id}
             className={`flex ${
               message.role === "user" ? "justify-end" : "justify-start"
             }`}
@@ -90,7 +171,7 @@ export const ChatInterface = ({ user }: ChatInterfaceProps) => {
             <div
               className={`max-w-[80%] p-3 rounded-lg animation-fade ${
                 message.role === "user"
-                  ? "bg-primary text-white"
+                  ? "bg-primary text-primary-foreground"
                   : "bg-muted"
               }`}
             >
@@ -108,8 +189,13 @@ export const ChatInterface = ({ user }: ChatInterfaceProps) => {
             placeholder="Type your message..."
             className="flex-1"
             onKeyPress={(e) => e.key === "Enter" && handleSend()}
+            disabled={isLoading}
           />
-          <Button onClick={handleSend} className="animation-scale">
+          <Button 
+            onClick={handleSend} 
+            className="animation-scale"
+            disabled={isLoading}
+          >
             <Send className="w-4 h-4" />
           </Button>
         </div>
