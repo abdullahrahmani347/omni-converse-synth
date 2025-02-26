@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Bot, Send, Sparkles } from "lucide-react";
+import { User } from "@supabase/supabase-js";
 
 interface Message {
   content: string;
@@ -11,7 +12,11 @@ interface Message {
   model: "creative" | "analytical" | "ethical";
 }
 
-export const ChatInterface = () => {
+interface ChatInterfaceProps {
+  user: User;
+}
+
+export const ChatInterface = ({ user }: ChatInterfaceProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [selectedModel, setSelectedModel] = useState<"creative" | "analytical" | "ethical">("creative");
@@ -40,11 +45,11 @@ export const ChatInterface = () => {
   };
 
   return (
-    <Card className="flex flex-col h-[calc(100vh-2rem)] m-4 overflow-hidden glass">
+    <Card className="flex flex-col h-[calc(100vh-8rem)] overflow-hidden glass">
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center space-x-2">
           <Bot className="w-6 h-6 text-primary" />
-          <h2 className="text-xl font-semibold">OmniMind Chat</h2>
+          <h2 className="text-xl font-semibold">Chat with OmniMind</h2>
         </div>
         <div className="flex space-x-2">
           <Button
